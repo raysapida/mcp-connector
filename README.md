@@ -11,6 +11,7 @@ Exposes Foobara commands according to the Model Context Protocol (MCP) specifica
     * [Super basic example](#super-basic-example)
     * [An example with entities](#an-example-with-entities)
     * [A destructive example](#a-destructive-example)
+    * [Sessions and multiple clients](#sessions-and-multiple-clients)
     * [Moar examples](#moar-examples)
   * [Contributing](#contributing)
   * [License](#license)
@@ -233,6 +234,28 @@ $ claude
 > Great! Thanks!
 ● You're welcome!
 ```
+
+### Sessions and multiple clients
+
+A stdio server has exactly one client, so by default the connector just remembers the most recent session in
+`current_session`.
+
+When one connector serves many clients (for example, from an HTTP server), pass a session store. Each `initialize`
+then creates a session with its own id, and later requests can be tied back to it:
+
+```ruby
+mcp_connector = Foobara::McpConnector.new(session_store: Foobara::McpConnector::InMemorySessionStore.new)
+
+request = mcp_connector.build_request(initialize_json)
+mcp_connector.run_request(request)
+session_id = request.session_id # hand this back to the client
+
+request = mcp_connector.build_request(tool_call_json, session_id:)
+request.session # => the stored session, or nil if the id is unknown or expired
+```
+
+`InMemorySessionStore` is thread-safe and expires sessions after an hour without activity (`ttl:`). Any object that
+responds to `create(session) => id`, `find(id) => session or nil`, and `delete(id) => boolean` can be used instead.
 
 ### Moar examples
 

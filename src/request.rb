@@ -11,7 +11,7 @@ module Foobara
         context({})
       end
 
-      attr_accessor :action_loaded
+      attr_accessor :action_loaded, :session_id, :session
 
       def full_command_name
         return if error || batch?
