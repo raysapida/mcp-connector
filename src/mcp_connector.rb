@@ -1,7 +1,7 @@
 module Foobara
   # TODO: somehow give a way to specify an association depth when registering commands?
   class McpConnector < CommandConnector
-    attr_accessor :current_session, :server_name, :server_version, :instructions
+    attr_accessor :current_session, :server_name, :server_version, :instructions, :session_store
 
     def initialize(
       *,
@@ -9,6 +9,7 @@ module Foobara
       server_name: default_server_name,
       server_version: default_server_version,
       instructions: default_instructions,
+      session_store: nil,
       default_serializers: Foobara::CommandConnectors::Serializers::AtomicSerializer,
       **,
       &
@@ -16,6 +17,7 @@ module Foobara
       self.server_name = server_name
       self.server_version = server_version
       self.instructions = instructions
+      self.session_store = session_store
 
       super(*, capture_unknown_error:, default_serializers:, **, &)
     end
@@ -75,9 +77,12 @@ module Foobara
       end
     end
 
-    # TODO: figure out how to support multiple sessions
     def session_created(session)
-      self.current_session = session
+      if session_store
+        session.id = session_store.create(session)
+      else
+        self.current_session = session
+      end
     end
 
     def run_request(request)
@@ -92,14 +97,30 @@ module Foobara
       end
     end
 
-    def build_request(*, **, &)
-      request = super
+    def build_request(*, session_id: nil, **, &)
+      request = super(*, **, &)
+
+      assign_session(request, session_id)
 
       # We add a serializer to the top-level request but not to the children of a batch requests
 
       request.serializers = [*request.serializers, json_serializer]
 
       request
+    end
+
+    def assign_session(request, session_id)
+      return unless session_id
+
+      request.session_id = session_id
+      request.session = session_store&.find(session_id)
+
+      if request.valid_batch?
+        request.batch.each do |batch_request|
+          batch_request.session_id = request.session_id
+          batch_request.session = request.session
+        end
+      end
     end
 
     def json_serializer

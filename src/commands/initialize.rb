@@ -63,6 +63,8 @@ module Foobara
 
         def notify_connector_of_session
           command_connector.session_created(session)
+          request.session = session
+          request.session_id = session.id
         end
 
         def command_connector

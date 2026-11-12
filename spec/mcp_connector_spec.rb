@@ -120,6 +120,114 @@ RSpec.describe Foobara::McpConnector do
       end
     end
 
+    describe "sessions" do
+      let(:initialize_json) do
+        JSON.generate(
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-03-26",
+            clientInfo: { name: "Some Client", version: "1.0.0" },
+            capabilities: {}
+          }
+        )
+      end
+
+      def run_and_return_request(json, session_id: nil)
+        request = command_connector.build_request(json, session_id:)
+        command_connector.run_request(request)
+        request
+      end
+
+      context "without a session store" do
+        it "tracks the latest session on the connector and on the request" do
+          request = run_and_return_request(initialize_json)
+
+          expect(command_connector.current_session).to be(request.session)
+          expect(request.session.initialized_with[:clientInfo][:name]).to eq("Some Client")
+          expect(request.session_id).to be_nil
+        end
+
+        it "records a passed session id without looking anything up" do
+          request = run_and_return_request(request_json, session_id: "abc")
+
+          expect(request.session_id).to eq("abc")
+          expect(request.session).to be_nil
+        end
+      end
+
+      context "with a session store" do
+        let(:session_store) { Foobara::McpConnector::InMemorySessionStore.new }
+        let(:command_connector) { described_class.new(capture_unknown_error:, session_store:) }
+
+        it "stores the session, gives it an id, and does not set current_session" do
+          request = run_and_return_request(initialize_json)
+
+          expect(request.session_id).to be_a(String)
+          expect(request.session.id).to eq(request.session_id)
+          expect(session_store.find(request.session_id)).to be(request.session)
+          expect(command_connector.current_session).to be_nil
+        end
+
+        it "gives each concurrent initialization its own stored session" do
+          requests = Array.new(10) { Thread.new { run_and_return_request(initialize_json) } }.map(&:value)
+
+          expect(requests.map(&:session_id).uniq.size).to eq(10)
+          expect(session_store.size).to eq(10)
+        end
+
+        context "when the store only returns an id" do
+          let(:session_store) do
+            Class.new do
+              def create(_session) = "fixed-id"
+            end.new
+          end
+
+          it "assigns that id to the session" do
+            request = run_and_return_request(initialize_json)
+
+            expect(request.session.id).to eq("fixed-id")
+            expect(request.session_id).to eq("fixed-id")
+          end
+        end
+
+        it "attaches the stored session to later requests" do
+          session_id = run_and_return_request(initialize_json).session_id
+
+          request = run_and_return_request(request_json, session_id:)
+
+          expect(request.session).to be(session_store.find(session_id))
+          expect(JSON.parse(request.response.body)["result"]).to eq(
+            "content" => [{ "type" => "text", "text" => "8" }]
+          )
+        end
+
+        it "leaves the session nil for an unknown session id so a transport can reject it" do
+          request = run_and_return_request(request_json, session_id: "unknown")
+
+          expect(request.session_id).to eq("unknown")
+          expect(request.session).to be_nil
+        end
+
+        it "attaches the session to every request in a batch" do
+          session_id = run_and_return_request(initialize_json).session_id
+          batch_json = JSON.generate([mcp_inputs, mcp_inputs.merge(id: 101)])
+
+          request = run_and_return_request(batch_json, session_id:)
+
+          expect(request.batch.map(&:session_id)).to eq([session_id, session_id])
+          expect(request.batch.map(&:session)).to all(be(session_store.find(session_id)))
+        end
+
+        it "still works through #run" do
+          session_id = run_and_return_request(initialize_json).session_id
+
+          expect(JSON.parse(command_connector.run(request_json, session_id:))["id"]).to eq(request_id)
+        end
+      end
+    end
+
     context "when listing tools (commands)" do
       let(:method) { "tools/list" }
       let(:params) { nil }
