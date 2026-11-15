@@ -177,6 +177,8 @@ module Foobara
                             -32_601
                           when Request::FoobaraCommandsDoNotAcceptArraysError
                             -32_602
+                          when CommandConnector::UnauthenticatedError
+                            401
                           else
                             -32_603
                           end
@@ -193,14 +195,8 @@ module Foobara
                             # simplecov:disable
                             404
                             # simplecov:enable
-                          when CommandConnector::UnauthenticatedError
-                            # simplecov:disable
-                            401
-                            # simplecov:enable
                           when CommandConnector::NotAllowedError
-                            # simplecov:disable
                             403
-                            # simplecov:enable
                           when CommandConnector::UnknownError
                             -32_603
                           when Foobara::DataError
