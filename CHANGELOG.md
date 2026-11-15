@@ -4,6 +4,9 @@
   `run(json, session_id:)`
 - Add an optional `session_store:` (with `InMemorySessionStore`) so multiple clients can share one connector without
   clobbering each other's session. Without a store, `current_session` is tracked as before
+- Serve MCP's Streamable HTTP transport: an McpConnector is now a Rack app (`#call`), with `allowed_origins:`,
+  `Mcp-Session-Id` sessions when a `session_store:` is given, and the Rack env available to authenticators
+- Add `#prepare_request` for running requests outside of `#run`
 
 ## [1.0.1] - 2026-04-17
 

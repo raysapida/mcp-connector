@@ -11,7 +11,7 @@ module Foobara
         context({})
       end
 
-      attr_accessor :action_loaded, :session_id, :session
+      attr_accessor :action_loaded, :session_id, :session, :env
 
       def full_command_name
         return if error || batch?
@@ -43,6 +43,10 @@ module Foobara
         end
 
         inputs
+      end
+
+      def initialization?
+        !batch? && method == "initialize"
       end
 
       def tool_call?

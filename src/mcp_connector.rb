@@ -1,7 +1,8 @@
 module Foobara
   # TODO: somehow give a way to specify an association depth when registering commands?
   class McpConnector < CommandConnector
-    attr_accessor :current_session, :server_name, :server_version, :instructions, :session_store
+    attr_accessor :current_session, :server_name, :server_version, :instructions, :session_store,
+                  :allowed_origins
 
     def initialize(
       *,
@@ -10,6 +11,7 @@ module Foobara
       server_version: default_server_version,
       instructions: default_instructions,
       session_store: nil,
+      allowed_origins: nil,
       default_serializers: Foobara::CommandConnectors::Serializers::AtomicSerializer,
       **,
       &
@@ -18,6 +20,7 @@ module Foobara
       self.server_version = server_version
       self.instructions = instructions
       self.session_store = session_store
+      self.allowed_origins = allowed_origins
 
       super(*, capture_unknown_error:, default_serializers:, **, &)
     end
@@ -40,6 +43,22 @@ module Foobara
 
     def run_stdio_server(io_in: $stdin, io_out: $stdout, io_err: $stderr)
       StdioRunner.new(self).run(io_in: io_in, io_out: io_out, io_err: io_err)
+    end
+
+    def call(env)
+      RackRunner.new(self).call(env)
+    end
+
+    def prepare_request(request_json, session_id: nil, env: nil)
+      process_delayed_connections
+
+      request = build_request(request_json, session_id:)
+
+      [request, *request.batch].each do |each_request|
+        each_request.env = env
+      end
+
+      request
     end
 
     def request_to_command_class(request)
