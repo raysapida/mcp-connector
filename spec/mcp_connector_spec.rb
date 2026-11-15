@@ -268,6 +268,26 @@ RSpec.describe Foobara::McpConnector do
         )
       end
 
+      context "when the batch includes requests that need the command connector" do
+        let(:mcp_inputs) do
+          [
+            { jsonrpc: "2.0", method: "tools/list", id: 10 },
+            { jsonrpc: "2.0", method: "initialize", id: 20,
+              params: {
+                protocolVersion: "2025-03-26",
+                clientInfo: { name: "Some Client", version: "1.0.0" },
+                capabilities: {}
+              } }
+          ]
+        end
+
+        it "runs them" do
+          expect(response_body.map { |r| r["id"] }).to eq([10, 20])
+          expect(response_body[0]["result"]["tools"].map { |t| t["name"] }).to eq([tool_name])
+          expect(response_body[1]["result"]["protocolVersion"]).to eq("2025-03-26")
+        end
+      end
+
       context "when the batch is empty" do
         let(:mcp_inputs) { [] }
 

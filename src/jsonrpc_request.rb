@@ -55,6 +55,14 @@ module Foobara
         super(*, **, &)
       end
 
+      def command_connector=(command_connector)
+        super
+
+        batch&.each do |batch_request|
+          batch_request.command_connector = command_connector
+        end
+      end
+
       def set_parsed_json
         self.parsed_request_body = if batch_child?
                                      raw_request_json
