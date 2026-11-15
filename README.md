@@ -12,6 +12,7 @@ Exposes Foobara commands according to the Model Context Protocol (MCP) specifica
     * [An example with entities](#an-example-with-entities)
     * [A destructive example](#a-destructive-example)
     * [Sessions and multiple clients](#sessions-and-multiple-clients)
+    * [Serving over HTTP](#serving-over-http)
     * [Moar examples](#moar-examples)
   * [Contributing](#contributing)
   * [License](#license)
@@ -246,16 +247,58 @@ then creates a session with its own id, and later requests can be tied back to i
 ```ruby
 mcp_connector = Foobara::McpConnector.new(session_store: Foobara::McpConnector::InMemorySessionStore.new)
 
-request = mcp_connector.build_request(initialize_json)
+request = mcp_connector.prepare_request(initialize_json)
 mcp_connector.run_request(request)
 session_id = request.session_id # hand this back to the client
 
-request = mcp_connector.build_request(tool_call_json, session_id:)
+request = mcp_connector.prepare_request(tool_call_json, session_id:)
 request.session # => the stored session, or nil if the id is unknown or expired
 ```
 
 `InMemorySessionStore` is thread-safe and expires sessions after an hour without activity (`ttl:`). Any object that
 responds to `create(session) => id`, `find(id) => session or nil`, and `delete(id) => boolean` can be used instead.
+
+### Serving over HTTP
+
+An McpConnector is also a Rack app that speaks MCP's Streamable HTTP transport, so you can serve it with any Rack
+server or mount it in a Rails app:
+
+```ruby
+# config.ru
+require "foobara/mcp_connector"
+
+mcp_connector = Foobara::McpConnector.new(allowed_origins: ["https://claude.ai"])
+mcp_connector.connect(BuildSuperDuperSecret)
+
+run mcp_connector
+```
+
+```ruby
+# config/routes.rb
+Rails.application.routes.draw do
+  mcp_connector = Foobara::McpConnector.new
+  mcp_connector.connect(BuildSuperDuperSecret)
+
+  mount mcp_connector => "/mcp"
+end
+```
+
+It answers `POST` with JSON (or `202 Accepted` for notifications) and does not offer a server-sent event stream, so
+`GET` gets `405 Method Not Allowed`.
+
+* `allowed_origins:` rejects requests whose `Origin` header is not in the list, which protects servers on localhost
+  from DNS rebinding. Requests without an `Origin` header, such as those from command-line clients, are allowed.
+* `session_store:` turns on sessions. `initialize` responds with an `Mcp-Session-Id` header, later requests must send
+  it back (`400` without it, `404` once it is unknown or expired), and `DELETE` ends the session. Without a store, the
+  server is stateless.
+* The Rack env is available to authenticators as `env`:
+
+```ruby
+mcp_connector = Foobara::McpConnector.new(
+  authenticator: -> { User.find_by_token(env["HTTP_AUTHORIZATION"]&.delete_prefix("Bearer ")) }
+)
+mcp_connector.connect(DeleteEverything, requires_authentication: true)
+```
 
 ### Moar examples
 
