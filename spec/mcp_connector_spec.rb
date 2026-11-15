@@ -387,6 +387,32 @@ RSpec.describe Foobara::McpConnector do
       end
     end
 
+    context "when the command requires authentication" do
+      let(:command_connector) do
+        user = authenticated_user
+        described_class.new(authenticator: -> { user })
+      end
+      let(:connect_command) do
+        allowed_value = allowed
+        command_connector.connect(command_class, requires_authentication: true, allowed_rule: -> { allowed_value })
+      end
+      let(:authenticated_user) { nil }
+      let(:allowed) { true }
+
+      it "responds with a 401" do
+        expect(response_body["error"]).to include("code" => 401, "message" => "Unauthenticated")
+      end
+
+      context "when authenticated but not allowed" do
+        let(:authenticated_user) { "someone" }
+        let(:allowed) { false }
+
+        it "responds with a 403" do
+          expect(response_body["error"]["code"]).to eq(403)
+        end
+      end
+    end
+
     context "when command explodes unexpectedly" do
       let(:command_class) do
         stub_module("SomeOrg") { foobara_organization! }
