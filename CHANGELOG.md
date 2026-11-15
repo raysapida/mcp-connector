@@ -1,3 +1,10 @@
+## [Unreleased]
+
+- Make sessions request-scoped: `Request#session` / `#session_id`, set by `initialize` and looked up from
+  `run(json, session_id:)`
+- Add an optional `session_store:` (with `InMemorySessionStore`) so multiple clients can share one connector without
+  clobbering each other's session. Without a store, `current_session` is tracked as before
+
 ## [1.0.1] - 2026-04-17
 
 - Handle new clientInfo fields
