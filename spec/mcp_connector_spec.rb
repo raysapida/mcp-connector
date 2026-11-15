@@ -312,6 +312,13 @@ RSpec.describe Foobara::McpConnector do
         expect(error["code"]).to eq(-32_700)
         expect(error["message"]).to include('Could not parse request: ')
       end
+
+      it "keeps the parse error when asked whether the request has an error" do
+        request = command_connector.build_request(request_json)
+
+        expect(request.error?).to be(true)
+        expect(request.error).to be_a(Foobara::McpConnector::Request::InvalidJsonError)
+      end
     end
 
     context "with bad inputs" do

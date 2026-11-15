@@ -54,7 +54,7 @@ module Foobara
       end
 
       def error?
-        action unless action_loaded
+        action unless action_loaded || error
         super
       end
 
